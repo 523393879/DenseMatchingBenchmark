@@ -50,6 +50,31 @@ then
 fi
 
 
+if [[ $1 == 'correlation' || $1 == 'all' ]]
+then
+
+    cd dmb/ops/correlation/
+
+    python setup.py clean
+
+    if [[ $2 == 'install' ]]
+    then
+        python setup.py install
+    else
+        rm -rf build
+        python setup.py build develop
+        cp -r build/lib* build/lib
+    fi
+
+    cd ../../../
+
+    echo "*********************************************************************"
+    echo "                         Correlation installed!"
+    echo "*********************************************************************"
+
+fi
+
+
 if [[ $1 == 'dmb' || $1 == 'all' ]]
 then
 

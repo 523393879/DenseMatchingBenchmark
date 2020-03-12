@@ -4,6 +4,10 @@ import argparse
 import os
 import os.path as osp
 
+import sys
+sys.path.insert(0, osp.join(osp.dirname(osp.abspath(__file__)), '../'))
+
+
 import torch
 
 from mmcv import Config
@@ -11,8 +15,8 @@ from mmcv import mkdir_or_exist
 
 from dmb.utils.collect_env import collect_env_info
 from dmb.utils.env import init_dist, get_root_logger, set_random_seed
-from dmb.modeling.stereo import build_stereo_model as build_model
-from dmb.data.datasets.stereo import build_dataset
+from dmb.modeling import build_model
+from dmb.data.datasets import build_dataset
 from dmb.apis.train import train_matcher
 
 
@@ -40,6 +44,16 @@ def parse_args():
         help='job launcher'
     )
     parser.add_argument('--local_rank', type=int, default=0)
+
+    #TODO del
+    parser.add_argument('--out_path',
+                        help='needed by job client')
+    parser.add_argument('--in_path',
+                        help='needed by job client')
+    parser.add_argument('--pretrained_path', help='needed by job client')
+    parser.add_argument('--job_name', help='needed by job client')
+    parser.add_argument('--job_id', help='needed by job client')
+
 
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:

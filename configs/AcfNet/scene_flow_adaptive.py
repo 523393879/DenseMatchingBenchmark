@@ -46,7 +46,7 @@ model = dict(
                 # the start disparity of disparity search range
                 start_disp=0,
                 # weight for confidence loss with regard to other loss type
-                weight=20.0,
+                weight=24.0,
                 # weights for different scale loss
                 weights=(1.0, 0.7, 0.5),
             ),
@@ -126,7 +126,7 @@ data = dict(
     # if disparity of datasets is sparse, default dataset is SceneFLow
     sparse=False,
     imgs_per_gpu=1,
-    workers_per_gpu=16,
+    workers_per_gpu=4,
     train=dict(
         type=dataset_type,
         data_root=data_root,
@@ -203,7 +203,7 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 validate = True
 load_from = None
-resume_from = None
+resume_from = osp.join(root, 'exps/AcfNet/scene_flow_adaptive/epoch_11.pth')
 
 workflow = [('train', 1)]
 work_dir = osp.join(root, 'exps/AcfNet/scene_flow_adaptive')

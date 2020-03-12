@@ -4,10 +4,6 @@ import warnings
 
 import numpy as np
 from imageio import imread
-import skimage
-import skimage.io
-import skimage.transform
-import matplotlib.pyplot as plt
 
 import torch
 
@@ -16,9 +12,8 @@ from mmcv import mkdir_or_exist
 from mmcv.runner import load_checkpoint
 
 import dmb.data.transforms as T
-from dmb.modeling.stereo import build_stereo_model as build_model
+from dmb.modeling import build_model
 from dmb.data.datasets.utils import load_scene_flow_disp
-from dmb.visualization.stereo import ShowResultTool
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -174,29 +169,3 @@ def _inference_generator(model, imgPairs, img_transform, device):
     for imgPair in imgPairs:
         yield _inference_single(model, imgPair, img_transform, device)
 
-
-def save_result(result, out_dir, image_name):
-    result_tool = ShowResultTool()
-    result = result_tool(result, color_map='gray', bins=100)
-
-    if 'GrayDisparity' in result.keys():
-        grayEstDisp = result['GrayDisparity']
-        gray_save_path = osp.join(out_dir, 'disp_0')
-        mkdir_or_exist(gray_save_path)
-        skimage.io.imsave(osp.join(gray_save_path, image_name), (grayEstDisp * 256).astype('uint16'))
-
-    if 'ColorDisparity' in result.keys():
-        colorEstDisp = result['ColorDisparity']
-        color_save_path = osp.join(out_dir, 'color_disp')
-        mkdir_or_exist(color_save_path)
-        plt.imsave(osp.join(color_save_path, image_name), colorEstDisp, cmap=plt.cm.hot)
-
-    if 'GroupColor' in result.keys():
-        group_save_path = os.path.join(out_dir, 'group_disp')
-        mkdir_or_exist(group_save_path)
-        plt.imsave(osp.join(group_save_path, image_name), result['GroupColor'], cmap=plt.cm.hot)
-
-    if 'ColorConfidence' in result.keys():
-        conf_save_path = os.path.join(out_dir, 'confidence')
-        mkdir_or_exist(conf_save_path)
-        plt.imsave(osp.join(conf_save_path, image_name), result['ColorConfidence'])

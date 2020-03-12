@@ -7,7 +7,7 @@ from collections import Iterable
 import time
 import unittest
 
-from dmb.modeling.stereo import build_stereo_model as build_model
+from dmb.modeling import build_model
 from mmcv import Config
 
 def clever_format(nums, format="%.2f"):
