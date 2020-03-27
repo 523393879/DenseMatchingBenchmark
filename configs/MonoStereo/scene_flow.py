@@ -3,94 +3,76 @@ import os.path as osp
 # model settings
 max_disp = 192
 model = dict(
-    meta_architecture="GeneralizedStereoModel",
-    max_disp=max_disp,  # max disparity
-    batch_norm=True,  # the model whether or not to use BatchNorm
+    meta_architecture="MonoStereo",
+    # max disparity
+    max_disp=max_disp,
+    # the model whether or not to use BatchNorm
+    batch_norm=True,
     backbone=dict(
-        type="PSMNet",
-        in_planes=3,  # the in planes of feature extraction backbone
+        type="MonoStereo",
+        # the in planes of feature extraction backbone
+        in_planes=3,
+    ),
+    disp_sampler=dict(
+        type='MONOSTEREO',
+        max_disp=192,
+        disparity_sample_number=3,
+        in_planes=192//4,
     ),
     cost_processor=dict(
-        # Use the concatenation of left and right feature to form cost volume, then aggregation
         type='CAT',
-        cost_computation=dict(
-            # default cat_fms
-            type="default",
-            # the maximum disparity of disparity search range under the resolution of feature
-            max_disp=int(max_disp // 4),
-            # the start disparity of disparity search range
-            start_disp=0,
-            # the step between near disparity sample
-            dilation=1,
+        cost_computation = dict(
+            # default fast_cat_fms
+            type="fast_mode",
         ),
         cost_aggregator=dict(
-            type="ACF",
-            # the maximum disparity of disparity search range
-            max_disp = max_disp,
-            # the in planes of cost aggregation sub network
+            type="MONOSTEREO",
+            # the in planes of cost aggregation sub network,
             in_planes=64,
-        ),
-    ),
-    cmn=dict(
-        # the number of replicated confidence measure network
-        num=3,
-        # variance = alpha * ( 1 - confidence ) + beta
-        # confidence estimation network coefficient
-        alpha=1.0,
-        # the lower bound of variance of distribution
-        beta=1.0,
-        losses=dict(
-            nll_loss=dict(
-                # the maximum disparity of disparity search range
-                max_disp=max_disp,
-                # the start disparity of disparity search range
-                start_disp=0,
-                # weight for confidence loss with regard to other loss type
-                weight=24.0,
-                # weights for different scale loss
-                weights=(1.0, 0.7, 0.5),
-            ),
+            # the in-planes of hourglass module when cost aggregating
+            hourglass_in_planes = 16,
+            disparity_sample_number=3,
         ),
     ),
     disp_predictor=dict(
-        # default FasterSoftArgmin
-        type="FASTER",
-        # the maximum disparity of disparity search range
-        max_disp=max_disp,
-        # the start disparity of disparity search range
-        start_disp=0,
-        # the step between near disparity sample
-        dilation=1,
+        # default SoftArgmin
+        type='DEFAULT',
         # the temperature coefficient of soft argmin
         alpha=1.0,
         # whether normalize the estimated cost volume
         normalize=True,
+
+    ),
+    disp_refinement=dict(
+        type='MONOSTEREO',
+        # the in planes of disparity refinement sub network
+        in_planes=3,
+        # the number of edge aware refinement module
+        num=1,
     ),
     losses=dict(
         l1_loss=dict(
             # the maximum disparity of disparity search range
             max_disp=max_disp,
-            # weight for l1_loss with regard to other loss type
-            weight=0.1,
             # weights for different scale loss
-            weights=(1.0, 0.7, 0.5),
+            weights=(1.0, 0.7, 1.0/2),
+            # weight for l1 loss with regard to other loss type
+            weight=1.0,
         ),
         focal_loss=dict(
             # the maximum disparity of disparity search range
             max_disp=max_disp,
             # the start disparity of disparity search range
             start_disp=0,
-            # the step between near disparity sample
-            dilation=1,
             # weight for stereo focal loss with regard to other loss type
             weight=1.0,
             # weights for different scale loss
-            weights=(1.0, 0.7, 0.5),
+            weights=(1.0, 0.7),
             # stereo focal loss focal coefficient
             coefficient=5.0,
             # the variance of uni-modal distribution
-            variance=None, # if not given, the variance will be estimated by network
-        )
+            variance=1.2,  # if not given, the variance will be estimated by network
+        ),
     ),
     eval=dict(
         # evaluate the disparity map within (lower_bound, upper_bound)
@@ -107,8 +89,6 @@ model = dict(
 
 # dataset settings
 dataset_type = 'SceneFlow'
-# data_root = 'datasets/{}/'.format(dataset_type)
-# annfile_root = osp.join(data_root, 'annotations')
 
 # root = '/home/youmin/'
 root = '/node01/jobs/io/out/youmin/'
@@ -123,9 +103,9 @@ vis_annfile_root = osp.join(vis_data_root, 'annotations')
 
 
 data = dict(
-    # if disparity of datasets is sparse, default dataset is SceneFLow
+    # whether disparity of datasets is sparse, e.g., SceneFLow is not sparse, but KITTI is sparse
     sparse=False,
-    imgs_per_gpu=1,
+    imgs_per_gpu=4,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -134,6 +114,7 @@ data = dict(
         input_shape=[256, 512],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
     eval=dict(
         type=dataset_type,
@@ -142,6 +123,7 @@ data = dict(
         input_shape=[544, 960],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
     # If you don't want to visualize the results, just uncomment the vis data
     vis=dict(
@@ -159,6 +141,7 @@ data = dict(
         input_shape=[544, 960],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
 )
 
@@ -170,45 +153,51 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20]
+    gamma=1/2,
+    step=[20, 40, 60, 64],
 )
-checkpoint_config = dict(interval=1)
+
+checkpoint_config = dict(
+    interval=4
+)
+# every n epoch evaluate
+validate_interval = 4
 
 log_config = dict(
     interval=10,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook'),
-    ])
-
-apex = dict(  # https://nvidia.github.io/apex/amp.html
-    synced_bn=True,  # whether to use apex.synced_bn
-    use_mixed_precision=False,  # whether to use apex for mixed precision training
-    type="float16",  # the model weight type: float16 or float32
-    loss_scale=16,  # the factor when apex scales the loss value
+    ]
 )
 
-total_epochs = 20
+# https://nvidia.github.io/apex/amp.html
+apex = dict(
+    # whether to use apex.synced_bn
+    synced_bn=True,
+    # whether to use apex for mixed precision training
+    use_mixed_precision=False,
+    # the model weight type: float16 or float32
+    type="float16",
+    # the factor when apex scales the loss value
+    loss_scale=16,
+)
+
+total_epochs = 64
 
 # each model will return several disparity maps, but not all of them need to be evaluated
 # here, by giving indexes, the framework will evaluate the corresponding disparity map
-eval_disparity_id = [0, 1, 2]
+eval_disparity_id = [0, 1, 2, 3, 4]
 
 gpus = 4
 dist_params = dict(backend='nccl')
-
 log_level = 'INFO'
 validate = True
 load_from = None
 resume_from = None
-
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/AcfNet/scene_flow_adaptive')
+work_dir = osp.join(root, 'exps/MonoStereo/scene_flow_correlation')
 
 # For test
-checkpoint = osp.join(work_dir, 'epoch_10.pth')
-out_dir = osp.join(work_dir, 'epoch_10')
-sparsification_plot = dict(
-    doing = True,
-    bins = 10,
-)
+checkpoint = osp.join(work_dir, 'epoch_64.pth')
+out_dir = osp.join(work_dir, 'epoch_64')

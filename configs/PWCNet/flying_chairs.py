@@ -5,7 +5,7 @@ max_displacement = 4
 task = 'flow'
 
 model = dict(
-    meta_architecture='HMNet',
+    meta_architecture='PWCNet',
     # the model whether or not to use BatchNorm
     batch_norm=False,
     # the stage in coarse-to-fine
@@ -78,9 +78,7 @@ model = dict(
             # a balance factor with absolute difference between estimated and ground truth flow
             epsilon=0.0,
             # weights for different scale loss
-            #    flow_fine,  f4, uf8,uf16,uf32, uf64,   gf4,   gf8,  gf16,  gf32,   gf64,
-            weights=(  1/1, 1/1, 1/2, 1/4, 1/8, 1/16,
-                       1/1, 1/2, 1/4, 1/8, 1/16),
+            weights=(0.125, 0.125, 0.25, 0.5, 1.0),
             # weight for l1 loss with regard to other loss type
             weight=1.0,
         ),
@@ -95,10 +93,10 @@ model = dict(
 # dataset settings
 dataset_type = 'FlyingChairs'
 
-# root = '/home/youmin/'
-root = '/node01/jobs/io/out/youmin/'
+root = '/home/youmin/'
+# root = '/node01/jobs/io/out/youmin/'
 
-data_root = osp.join('/ssd/', 'OpticalFlow/', dataset_type)
+data_root = osp.join(root, 'data/OpticalFlow/', dataset_type)
 annfile_root = osp.join(root, 'data/annotations/', dataset_type)
 
 # If you don't want to visualize the results, just uncomment the vis data
@@ -157,7 +155,7 @@ lr_config = dict(
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
     gamma=1.0 / 2,
-    step=[20, 40, 60, 80, 100]  # StepLrUpdate
+    step=[40, 60, 80, 100]  # StepLrUpdate
 )
 checkpoint_config = dict(
     interval=5
@@ -189,7 +187,7 @@ total_epochs = 100
 
 # each model will return several flow maps, but not all of them need to be evaluated
 # here, by giving indexes, the framework will evaluate the corresponding flow map
-eval_flow_id = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+eval_flow_id = [0, 1, 2, 3, 4]
 
 gpus = 8
 dist_params = dict(backend='nccl')
@@ -198,7 +196,7 @@ validate = True
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/HMNet/flying_chairs_1.0')
+work_dir = osp.join(root, 'exps/PWCNet/flying_chairs')
 
 # For test
 checkpoint = osp.join(work_dir, 'epoch_100.pth')

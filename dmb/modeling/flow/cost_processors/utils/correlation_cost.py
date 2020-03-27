@@ -18,3 +18,4 @@ class CorrelationCost(nn.Module):
         out = self.relu(out)
 
         return out
+

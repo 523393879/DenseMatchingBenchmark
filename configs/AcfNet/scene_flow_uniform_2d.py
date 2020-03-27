@@ -12,7 +12,7 @@ model = dict(
     ),
     cost_processor=dict(
         # Use the concatenation of left and right feature to form cost volume, then aggregation
-        type='CAT',
+        type='COR',
         cost_computation=dict(
             # default cat_fms
             type="default",
@@ -24,32 +24,11 @@ model = dict(
             dilation=1,
         ),
         cost_aggregator=dict(
-            type="ACF",
+            type="ACF2D",
             # the maximum disparity of disparity search range
             max_disp = max_disp,
             # the in planes of cost aggregation sub network
-            in_planes=64,
-        ),
-    ),
-    cmn=dict(
-        # the number of replicated confidence measure network
-        num=3,
-        # variance = alpha * ( 1 - confidence ) + beta
-        # confidence estimation network coefficient
-        alpha=1.0,
-        # the lower bound of variance of distribution
-        beta=1.0,
-        losses=dict(
-            nll_loss=dict(
-                # the maximum disparity of disparity search range
-                max_disp=max_disp,
-                # the start disparity of disparity search range
-                start_disp=0,
-                # weight for confidence loss with regard to other loss type
-                weight=24.0,
-                # weights for different scale loss
-                weights=(1.0, 0.7, 0.5),
-            ),
+            in_planes = max_disp//4,
         ),
     ),
     disp_predictor=dict(
@@ -67,14 +46,6 @@ model = dict(
         normalize=True,
     ),
     losses=dict(
-        l1_loss=dict(
-            # the maximum disparity of disparity search range
-            max_disp=max_disp,
-            # weight for l1_loss with regard to other loss type
-            weight=0.1,
-            # weights for different scale loss
-            weights=(1.0, 0.7, 0.5),
-        ),
         focal_loss=dict(
             # the maximum disparity of disparity search range
             max_disp=max_disp,
@@ -89,8 +60,16 @@ model = dict(
             # stereo focal loss focal coefficient
             coefficient=5.0,
             # the variance of uni-modal distribution
-            variance=None, # if not given, the variance will be estimated by network
-        )
+            variance=1.2, # if not given, the variance will be estimated by network
+        ),
+        l1_loss=dict(
+            # the maximum disparity of disparity search range
+            max_disp=max_disp,
+            # weight for l1_loss with regard to other loss type
+            weight=0.1,
+            # weights for different scale loss
+            weights=(1.0, 0.7, 0.5),
+        ),
     ),
     eval=dict(
         # evaluate the disparity map within (lower_bound, upper_bound)
@@ -123,9 +102,9 @@ vis_annfile_root = osp.join(vis_data_root, 'annotations')
 
 
 data = dict(
-    # if disparity of datasets is sparse, default dataset is SceneFLow
+    # whether disparity of datasets is sparse, default dataset is SceneFLow
     sparse=False,
-    imgs_per_gpu=1,
+    imgs_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
@@ -134,6 +113,7 @@ data = dict(
         input_shape=[256, 512],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
     eval=dict(
         type=dataset_type,
@@ -142,6 +122,7 @@ data = dict(
         input_shape=[544, 960],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
     # If you don't want to visualize the results, just uncomment the vis data
     vis=dict(
@@ -159,6 +140,7 @@ data = dict(
         input_shape=[544, 960],
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
+        use_right_disp=False,
     ),
 )
 
@@ -190,10 +172,6 @@ apex = dict(  # https://nvidia.github.io/apex/amp.html
 
 total_epochs = 20
 
-# each model will return several disparity maps, but not all of them need to be evaluated
-# here, by giving indexes, the framework will evaluate the corresponding disparity map
-eval_disparity_id = [0, 1, 2]
-
 gpus = 4
 dist_params = dict(backend='nccl')
 
@@ -203,12 +181,8 @@ load_from = None
 resume_from = None
 
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/AcfNet/scene_flow_adaptive')
+work_dir = osp.join(root, 'exps/AcfNet/scene_flow_uniform_2d')
 
 # For test
 checkpoint = osp.join(work_dir, 'epoch_10.pth')
 out_dir = osp.join(work_dir, 'epoch_10')
-sparsification_plot = dict(
-    doing = True,
-    bins = 10,
-)

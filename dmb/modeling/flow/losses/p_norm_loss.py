@@ -8,6 +8,7 @@ def sparse_max_pool(input, size):
     output = F.adaptive_max_pool2d(input * positive, size) - F.adaptive_max_pool2d(-input * negative, size)
     return output
 
+
 def zero_mask(input, eps=1e-12):
     mask = abs(input) < eps
     return mask
@@ -54,17 +55,30 @@ class PNormLoss(object):
             scaled_gtFlow = self.scale_func(scaled_gtFlow, (H, W))
 
         # calculate loss
-        diff = abs(scaled_gtFlow - estFlow) + self.epsilon
+        # [B, 2, H, W]
+        diff = torch.abs(scaled_gtFlow - estFlow) + self.epsilon
 
-        loss = torch.norm(diff, p=self.p, dim=1)
+        # [B, H, W]
+        loss = torch.norm(diff, p=self.p, dim=1, keepdim=False)
+
+        # get invalid mask where motion is invalid
+        # [B, H, W]
+        gt_u, gt_v = scaled_gtFlow[:, 0, :, :], scaled_gtFlow[:, 1, :, :]
+        # [B, H, W]
+        invalid_mask = torch.isnan(gt_u) | torch.isnan(gt_v)
+        # in a image with shape [H, W], the maximum motion is within [-W, W] and [-H, H]
+        invalid_mask = invalid_mask | ((gt_u > W) | (gt_u < -W))
+        invalid_mask = invalid_mask | ((gt_v > H) | (gt_v < -H))
 
         if self.sparse:
             # mask for valid disparity
             # Attention: the invalid flow of KITTI is set as 0, be sure to mask it out
-            invalid_mask = (zero_mask(scaled_gtFlow[:, 0, :, :])) & (zero_mask(scaled_gtFlow[:, 1, :, :]))
-            loss = loss[~invalid_mask]
+            # [B, H, W]
+            sparse_mask = (zero_mask(gt_u)) & (zero_mask(gt_v))
+            invalid_mask = invalid_mask | sparse_mask
 
-        loss = loss.mean()
+        loss = loss[~invalid_mask]
+        loss = loss.sum() / B
 
         return loss
 

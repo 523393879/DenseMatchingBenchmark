@@ -1,7 +1,7 @@
 ## Installation
 
 ### Requirements:
-- PyTorch1.1+, Python3.5+, Cuda10.0+
+- PyTorch1.2+, Python3.5+, Cuda10.0+
 
 
 ### Option 1: Step-by-step installation

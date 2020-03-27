@@ -94,12 +94,12 @@ class testModel(unittest.TestCase):
 
         self.avg_time[module_name] = avg_time
 
-    # @unittest.skip("demonstrating skipping")
+    @unittest.skip("demonstrating skipping")
     def test_0_OutputModel(self):
         print(self.model)
         calcFlops(self.model, self.model_input['batch'])
 
-    # @unittest.skip("demonstrating skipping")
+    @unittest.skip("demonstrating skipping")
     def test_1_ModelTime(self):
         self.timeTemplate(self.model, 'Model', **self.model_input)
 

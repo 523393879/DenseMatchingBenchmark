@@ -6,12 +6,14 @@ then
     cd dmb/ops/libGANet/
 
     python setup.py clean
+    rm -rf build
+    rm -r dist
+    rm -r *.egg-info
 
     if [[ $2 == 'install' ]]
     then
         python setup.py install
     else
-        rm -rf build
         python setup.py build develop
         cp -r build/lib* build/lib
     fi
@@ -31,12 +33,14 @@ then
     cd dmb/ops/spn/
 
     python setup.py clean
+    rm -rf build
+    rm -r dist
+    rm -r *.egg-info
 
     if [[ $2 == 'install' ]]
     then
         python setup.py install
     else
-        rm -rf build
         python setup.py build develop
         cp -r build/lib* build/lib
     fi
@@ -56,12 +60,14 @@ then
     cd dmb/ops/correlation/
 
     python setup.py clean
+    rm -rf build
+    rm -r dist
+    rm -r *.egg-info
 
     if [[ $2 == 'install' ]]
     then
         python setup.py install
     else
-        rm -rf build
         python setup.py build develop
         cp -r build/lib* build/lib
     fi
@@ -79,12 +85,14 @@ if [[ $1 == 'dmb' || $1 == 'all' ]]
 then
 
     python setup.py clean
+    rm -r build
+    rm -r dist
+    rm -r *.egg-info
 
     if [[ $2 == 'install' ]]
     then
         python setup.py install
     else
-        rm -r build
         python setup.py build develop
         cp -r build/lib* build/lib
     fi

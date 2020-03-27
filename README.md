@@ -1,6 +1,6 @@
 # DenseMatchingBenchmark
 This project aims at providing the necessary building blocks for easily
-creating dense matching models, e.g. Stereo Matching, Scene Flow using **PyTorch 1.1** or higher.
+creating dense matching models, e.g. Stereo Matching, Scene Flow using **PyTorch 1.2** or higher.
 
 ## Introduction
 Our architecture is based on two wellknown detection framework: [mmdetection](https://github.com/open-mmlab/mmdetection) and [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark). By integating their major features, our architecture is suitable for dense matching, and achieves robust performance！

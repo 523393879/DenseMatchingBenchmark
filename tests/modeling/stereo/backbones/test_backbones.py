@@ -18,7 +18,7 @@ class testBackbones(unittest.TestCase):
     def setUpClass(cls):
         cls.device = torch.device('cuda:7')
         config_path = '/home/zhixiang/youmin/projects/depth/public/' \
-                      'DenseMatchingBenchmark/configs/AnyNet/scene_flow.py'
+                      'DenseMatchingBenchmark/configs/MonoStereo/scene_flow.py'
         cls.cfg = Config.fromfile(config_path)
         cls.backbone = build_backbone(cls.cfg)
         cls.backbone.to(cls.device)

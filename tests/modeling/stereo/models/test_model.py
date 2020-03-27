@@ -42,9 +42,9 @@ class testModel(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.device = torch.device('cuda:0')
+        cls.device = torch.device('cuda:7')
         config_path = '/home/zhixiang/youmin/projects/depth/public/' \
-                      'DenseMatchingBenchmark/configs/DeepPruner/scene_flow_8x.py'
+                      'DenseMatchingBenchmark/configs/MonoStereo/scene_flow.py'
         cls.cfg = Config.fromfile(config_path)
         cls.model = build_model(cls.cfg)
         cls.model.to(cls.device)
@@ -99,7 +99,7 @@ class testModel(unittest.TestCase):
         print(self.model)
         calcFlops(self.model, self.model_input['batch'])
 
-    @unittest.skip("demonstrating skipping")
+    # @unittest.skip("demonstrating skipping")
     def test_1_ModelTime(self):
         self.timeTemplate(self.model, 'Model', **self.model_input)
 
@@ -142,7 +142,10 @@ class testModel(unittest.TestCase):
 
         print('Result for disparity:')
         print('Length of disparity map list: ', len(result['disps']))
-        print(result['disps'][0].shape)
+        for i in range(len(result['disps'])):
+            d = result['disps'][i]
+            if d is not None and torch.is_tensor(d):
+                print('Disparity {} with shape: '.format(i), d.shape)
 
         if 'costs' in result:
             print('Result for Cost: ')

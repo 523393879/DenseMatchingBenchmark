@@ -6,6 +6,7 @@ from .aggregators.hm_net import HMAggregator
 from .utils.correlation_cost import CorrelationCost
 from dmb.modeling.flow.layers.inverse_warp_flow import inverse_warp_flow
 from dmb.modeling.flow.flow_predictors import build_flow_predictor
+from dmb.modeling.flow.flow_predictors.hm_net import HMPredictor
 
 class HMNetProcessor(nn.Module):
     """
@@ -75,6 +76,7 @@ class HMNetProcessor(nn.Module):
         if self.global_matching:
             # cost aggregation for global information
             self.global_aggregator = nn.ModuleDict()
+            self.global_flow_predictor = nn.ModuleDict()
             self.global_aggregator_in_planes = self.cfg.model.cost_processor.cost_aggregator.global_in_planes
             self.global_aggregator_out_planes = self.cfg.model.cost_processor.cost_aggregator.global_out_planes
 
@@ -82,9 +84,13 @@ class HMNetProcessor(nn.Module):
             for st in self.stage:
                 self.global_aggregator[st] = nn.Sequential(
                     nn.Conv2d(self.global_aggregator_in_planes[st], self.global_aggregator_out_planes,
-                            kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
+                              kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
                     nn.LeakyReLU(0.1, inplace=True),
                 )
+
+                self.global_flow_predictor[st] = HMPredictor(in_planes=self.global_aggregator_out_planes,
+                                                             batch_norm=self.batch_norm)
+
 
         # flow predictor
         self.flow_predictor = nn.ModuleDict()
@@ -112,11 +118,14 @@ class HMNetProcessor(nn.Module):
     def forward(self, stage, left=None, right=None, global_cost=None, last_stage_cost=None, last_stage_flow=None):
         # cost volume
         cost = None
+        global_flow = None
         if self.global_matching:
             if last_stage_flow is not None:
                 global_cost = torch.cat((global_cost, last_stage_cost, last_stage_flow), dim=1)
             # [B, global_aggregator_out_planes, H, W]
             cost = self.global_aggregator[stage](global_cost)
+
+            global_flow = self.global_flow_predictor[stage](cost)
 
         if self.coarse_to_fine:
             if last_stage_flow is not None:
@@ -147,16 +156,11 @@ class HMNetProcessor(nn.Module):
         if self.residual and (last_stage_flow is not None):
             flow = flow + last_stage_flow
 
-        if stage != 'warp_level_4':
-            # [B, 2, 2H, 2W], up-sample 2x, corresponding flow value x2
-            up_flow = self.up_flow_op[stage](flow*2)
-    
-            # [B, 2, 2H, 2W]
-            up_cost = self.up_cost_op[stage](cost)
+        # [B, 2, 2H, 2W], up-sample 2x, corresponding flow value x2
+        up_flow = self.up_flow_op[stage](flow * 2)
 
-        # for the final stage, network outputted cost will be used for refinement
-        else: # stage == 'warp_level_4':
-            up_flow = flow
-            up_cost = cost
+        # [B, 2, 2H, 2W]
+        up_cost = self.up_cost_op[stage](cost)
 
-        return up_flow, up_cost
+
+        return flow, cost, up_flow, up_cost, global_flow
