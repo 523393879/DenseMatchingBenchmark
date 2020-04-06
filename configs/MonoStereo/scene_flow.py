@@ -2,6 +2,8 @@ import os.path as osp
 
 # model settings
 max_disp = 192
+C = 8
+
 model = dict(
     meta_architecture="MonoStereo",
     # max disparity
@@ -12,12 +14,22 @@ model = dict(
         type="MonoStereo",
         # the in planes of feature extraction backbone
         in_planes=3,
+        # the base channels of convolution layer in AnyNet
+        C=C,
     ),
     disp_sampler=dict(
         type='MONOSTEREO',
+        # max disparity
         max_disp=192,
-        disparity_sample_number=3,
-        in_planes=192//4,
+        # the down-sample scale of the input feature map
+        scale=4,
+        # the number of diaparity samples
+        disparity_sample_number=9,
+        # the in planes of extracted feature
+        in_planes=2*C,
+        # the base channels of convolution layer in this network
+        C=C,
+        sample_radius_list = [4, 8, 16, 32]
     ),
     cost_processor=dict(
         type='CAT',
@@ -28,10 +40,11 @@ model = dict(
         cost_aggregator=dict(
             type="MONOSTEREO",
             # the in planes of cost aggregation sub network,
-            in_planes=64,
-            # the in-planes of hourglass module when cost aggregating
-            hourglass_in_planes = 16,
-            disparity_sample_number=3,
+            in_planes=4*C,
+            # the base channels of convolution layer in this network
+            C=C,
+            # the number of diaparity samples
+            disparity_sample_number=9,
         ),
     ),
     disp_predictor=dict(
@@ -49,13 +62,15 @@ model = dict(
         in_planes=3,
         # the number of edge aware refinement module
         num=1,
+        # the base channels of convolution layer in this network
+        C=C,
     ),
     losses=dict(
         l1_loss=dict(
             # the maximum disparity of disparity search range
             max_disp=max_disp,
             # weights for different scale loss
-            weights=(1.0, 0.7, 1.0/2),
+            weights=(1.0, 0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1),
             # weight for l1 loss with regard to other loss type
             weight=1.0,
         ),
@@ -67,7 +82,7 @@ model = dict(
             # weight for stereo focal loss with regard to other loss type
             weight=1.0,
             # weights for different scale loss
-            weights=(1.0, 0.7),
+            weights=(1.0, 0.5),
             # stereo focal loss focal coefficient
             coefficient=5.0,
             # the variance of uni-modal distribution
@@ -93,7 +108,8 @@ dataset_type = 'SceneFlow'
 # root = '/home/youmin/'
 root = '/node01/jobs/io/out/youmin/'
 
-data_root = osp.join(root, 'data/StereoMatching/', dataset_type)
+# data_root = osp.join(root, 'data/StereoMatching/', dataset_type)
+data_root = '/SceneFlow'
 annfile_root = osp.join(root, 'data/annotations/', dataset_type)
 
 # If you don't want to visualize the results, just uncomment the vis data
@@ -187,7 +203,7 @@ total_epochs = 64
 
 # each model will return several disparity maps, but not all of them need to be evaluated
 # here, by giving indexes, the framework will evaluate the corresponding disparity map
-eval_disparity_id = [0, 1, 2, 3, 4]
+eval_disparity_id = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 gpus = 4
 dist_params = dict(backend='nccl')
@@ -196,7 +212,7 @@ validate = True
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/MonoStereo/scene_flow_correlation')
+work_dir = osp.join(root, 'exps/MonoStereo/scene_flow_correlation_C8_deform_radiusFP')
 
 # For test
 checkpoint = osp.join(work_dir, 'epoch_64.pth')

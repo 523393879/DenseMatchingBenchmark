@@ -12,23 +12,27 @@ model = dict(
     ),
     cost_processor=dict(
         # Use the concatenation of left and right feature to form cost volume, then aggregation
-        type='COR',
+        type='DIF',
         cost_computation=dict(
             # default cat_fms
-            type="default",
+            type="fast_mode",
             # the maximum disparity of disparity search range under the resolution of feature
             max_disp=int(max_disp // 4),
             # the start disparity of disparity search range
             start_disp=0,
             # the step between near disparity sample
             dilation=1,
+            # normal the cost volume at Channel dimension
+            normalize=False,
+            # p norm
+            p=1.0,
         ),
         cost_aggregator=dict(
-            type="ACF2D",
+            type="ACF",
             # the maximum disparity of disparity search range
             max_disp = max_disp,
             # the in planes of cost aggregation sub network
-            in_planes = max_disp//4,
+            in_planes = 32, # max_disp//4,
         ),
     ),
     disp_predictor=dict(
@@ -92,7 +96,8 @@ dataset_type = 'SceneFlow'
 # root = '/home/youmin/'
 root = '/node01/jobs/io/out/youmin/'
 
-data_root = osp.join(root, 'data/StereoMatching/', dataset_type)
+# data_root = osp.join(root, 'data/StereoMatching/', dataset_type)
+data_root = '/SceneFlow'
 annfile_root = osp.join(root, 'data/annotations/', dataset_type)
 
 # If you don't want to visualize the results, just uncomment the vis data
@@ -172,6 +177,10 @@ apex = dict(  # https://nvidia.github.io/apex/amp.html
 
 total_epochs = 20
 
+# each model will return several disparity maps, but not all of them need to be evaluated
+# here, by giving indexes, the framework will evaluate the corresponding disparity map
+eval_disparity_id = [0, 1, 2]
+
 gpus = 4
 dist_params = dict(backend='nccl')
 
@@ -181,7 +190,7 @@ load_from = None
 resume_from = None
 
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/AcfNet/scene_flow_uniform_2d')
+work_dir = osp.join(root, 'exps/AcfNet/scene_flow_uniform_difference_Agg3D')
 
 # For test
 checkpoint = osp.join(work_dir, 'epoch_10.pth')

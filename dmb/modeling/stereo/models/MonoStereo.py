@@ -47,32 +47,36 @@ class MonoStereo(nn.Module):
         target = batch['leftDisp'] if 'leftDisp' in batch else None
 
         # extract image feature
-        ref_group_fms, tgt_group_fms = self.backbone(ref_img, tgt_img)
+        ref_fms, tgt_fms = self.backbone(ref_img, tgt_img)
 
-        # [B, 32, H//16, W//16], [B, 32, H//8, W//8], [B, 32, H//4, W//4]
-        ref_fms_16, ref_fms_8, ref_fms = ref_group_fms
-        tgt_fms_16, tgt_fms_8, tgt_fms = tgt_group_fms
-        # ref_fms, tgt_fms = self.backbone(ref_img, tgt_img)
+        # all returned disparity map are in 1/4 resolution
+        disparity_sample, proposal_disps, proposal_costs, offsets, masks = self.disp_sampler(left=ref_fms, right=tgt_fms)
+        # up-sample to full resolution
+        h, w = ref_img.shape[-2:]
+        ph, pw = disparity_sample.shape[-2:]
+        full_disparity_sample = F.interpolate(disparity_sample * w / pw, size=(h, w), mode='bilinear', align_corners=False)
+        full_proposal_disps = [F.interpolate(d * w / d.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for d in proposal_disps]
+        full_offsets = [F.interpolate(f*w/f.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for f in offsets]
+        full_masks = [F.interpolate(m, size=(h, w), mode='bilinear', align_corners=False) for m in masks]
 
-        # all returned disparity map are in full resolution
-        disparity_sample, mono_disps, corr_costs = self.disp_sampler(left=ref_group_fms, right=tgt_group_fms)
 
         # compute cost volume
-        h, w = ref_fms.shape[-2:]
-        down_disparity_sample = F.interpolate(disparity_sample, size=(h, w), mode='bilinear', align_corners=False)
-        costs = self.cost_processor(ref_fms, tgt_fms, disp_sample=down_disparity_sample)
+        costs = self.cost_processor(ref_fms, tgt_fms, disp_sample=disparity_sample)
 
         # disparity prediction
-        disps = [self.disp_predictor(cost, disp_sample=disparity_sample) for cost in costs]
+        disps = [self.disp_predictor(cost, disp_sample=full_disparity_sample) for cost in costs]
 
         # disparity refinement
         if self.disp_refinement is not None:
             disps = self.disp_refinement(disps, ref_fms, tgt_fms, ref_img, tgt_img)
 
-        # extend disparity map estimated in monocular way
-        disps.extend(mono_disps)
+        # # extend disparity map estimated in monocular way
+        disparity_samples = torch.split(full_disparity_sample, 1, dim=1)
+        disps.extend(disparity_samples)
+        # disps.extend(full_proposal_disps)
 
-        costs = corr_costs
+        # supervise cost computed in disparity sampler network
+        costs = proposal_costs
 
         if self.training:
             loss_dict = dict()
@@ -87,7 +91,6 @@ class MonoStereo(nn.Module):
 
             loss_args = dict(
                 variance = variance,
-                # disp_sample=disparity_sample,
             )
 
             gsm_loss_dict = self.loss_evaluator(disps, costs, target, **loss_args)
@@ -99,13 +102,19 @@ class MonoStereo(nn.Module):
 
             # visualize residual disparity map
             res_disps = []
-            for i in range(1, len(disps)):
-                res_disps.append(disps[i-1] - disps[i])
+            for i in range(1, 3):
+                res_disps.append((disps[i-1] - disps[i]).abs())
             disps.extend(res_disps)
+
+            # visualize disparity sample
+            # disparity_samples = torch.split(full_disparity_sample, 1, dim=1)
+            # disps.extend(disparity_samples)
 
             results = dict(
                 disps=disps,
                 costs=costs,
+                offsets=full_offsets,
+                masks=full_masks,
             )
 
             if self.cmn is not None:

@@ -25,15 +25,16 @@ class MonoStereoRefinement(nn.Module):
 
     """
 
-    def __init__(self, in_planes, batch_norm=True, num=1):
+    def __init__(self, in_planes, batch_norm=True, num=1, C=16):
         super(MonoStereoRefinement, self).__init__()
         self.in_planes = in_planes
         self.batch_norm = batch_norm
         self.num = num
+        self.C = C
 
         # cascade the edge aware refinement module
         self.refine_blocks = nn.ModuleList([
-            WarpErrorRefinement(self.in_planes, self.batch_norm) for _ in range(self.num)
+            WarpErrorRefinement(self.in_planes, C=C, batch_norm=batch_norm) for _ in range(self.num)
         ])
 
     def forward(self, disps, left, right, leftImage, rightImage):

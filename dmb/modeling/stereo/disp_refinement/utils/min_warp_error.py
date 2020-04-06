@@ -12,7 +12,7 @@ import torch.utils.data
 import torch.nn.functional as F
 
 from dmb.modeling.stereo.layers.inverse_warp import inverse_warp
-from dmb.modeling.stereo.layers.basic_layers import conv_bn_relu, BasicBlock
+from dmb.modeling.stereo.layers.basic_layers import conv_bn_relu, BasicBlock, conv_bn, deconv_bn_relu
 
 
 class WarpErrorRefinement(nn.Module):
@@ -32,23 +32,24 @@ class WarpErrorRefinement(nn.Module):
 
     """
 
-    def __init__(self, in_planes, batch_norm=True):
+    def __init__(self, in_planes, C=16, batch_norm=True):
         super(WarpErrorRefinement, self).__init__()
         self.in_planes = in_planes
         self.batch_norm = batch_norm
+        self.C = C
 
-        self.conv_mix = conv_bn_relu(batch_norm, in_planes*4 + 1, 32, kernel_size=3, stride=1, padding=1, dilation=1, bias=False)
+        self.conv_mix = conv_bn_relu(batch_norm, in_planes*4 + 1, 2*C, kernel_size=3, stride=1, padding=1, dilation=1, bias=False)
 
         # Dilated residual module
         self.residual_dilation_blocks = nn.ModuleList()
         self.dilation_list = [1, 2, 4, 8, 1, 1]
         for dilation in self.dilation_list:
             self.residual_dilation_blocks.append(
-                conv_bn_relu(batch_norm, 32, 32, kernel_size=3, stride=1,
+                conv_bn_relu(batch_norm, 2*C, 2*C, kernel_size=3, stride=1,
                              padding=dilation, dilation=dilation, bias=False)
             )
 
-        self.conv_res = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1, bias=True)
+        self.conv_res = nn.Conv2d(2*C, 1, kernel_size=3, stride=1, padding=1, bias=True)
 
     def forward(self, disp, left, right):
         B, C, H, W = left.shape
@@ -68,11 +69,10 @@ class WarpErrorRefinement(nn.Module):
         # mix the info inside the disparity map, left image, right image and warp error
         mix_feat = self.conv_mix(torch.cat((left, right, warp_right, error, disp), 1))
 
-
         for block in self.residual_dilation_blocks:
             mix_feat = block(mix_feat)
 
-        # get residual disparity map, in [BatchSize, 1, Height, Width]
+            # get residual disparity map, in [BatchSize, 1, Height, Width]
         res_disp = self.conv_res(mix_feat)
 
         # refine the upsampled disparity map, in [BatchSize, 1, Height, Width]

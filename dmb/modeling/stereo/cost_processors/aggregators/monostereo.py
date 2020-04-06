@@ -9,7 +9,6 @@ class MonoStereoAggregator(nn.Module):
     """
     Args:
         in_planes (int): the channels of raw cost volume
-        hourglass_in_planes (int): the channels of hourglass module for cost aggregation
         batch_norm (bool): whether use batch normalization layer, default True
 
     Inputs:
@@ -20,29 +19,29 @@ class MonoStereoAggregator(nn.Module):
             in [BatchSize, MaxDisparity, 4*Height, 4*Width] layout
     """
 
-    def __init__(self, in_planes, hourglass_in_planes, disparity_sample_number=3, batch_norm=True):
+    def __init__(self, in_planes, C, disparity_sample_number=3, batch_norm=True):
         super(MonoStereoAggregator, self).__init__()
         self.in_planes = in_planes
-        self.hourglass_in_planes = hourglass_in_planes
-        self.disparity_sample_number = disparity_sample_number * 2 + 1
+        self.C = C
+        self.disparity_sample_number = disparity_sample_number
         self.batch_norm = batch_norm
 
         self.dres0 = nn.Sequential(
-            conv3d_bn_relu(batch_norm, in_planes, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            conv3d_bn_relu(batch_norm, 64, 32, kernel_size=3, stride=1, padding=1, bias=False),
+            conv3d_bn_relu(batch_norm, in_planes, C*2, kernel_size=3, stride=1, padding=1, bias=False),
+            conv3d_bn_relu(batch_norm, C*2, C*2, kernel_size=3, stride=1, padding=1, bias=False),
         )
 
         self.dres1 = nn.Sequential(
-            conv3d_bn_relu(batch_norm, 32, 32, kernel_size=3, stride=1, padding=1, bias=False),
-            conv3d_bn_relu(batch_norm, 32, hourglass_in_planes, kernel_size=3, stride=1, padding=1, bias=False),
+            conv3d_bn_relu(batch_norm, C*2, C*2, kernel_size=3, stride=1, padding=1, bias=False),
+            conv3d_bn_relu(batch_norm, C*2, C*2, kernel_size=3, stride=1, padding=1, bias=False),
         )
 
-        self.dres2 = HWHourglass(hourglass_in_planes, batch_norm=batch_norm)
+        self.dres2 = HWHourglass(C*2, batch_norm=batch_norm)
 
         self.classify = nn.Sequential(
-            conv3d_bn_relu(batch_norm, hourglass_in_planes, hourglass_in_planes * 2,
+            conv3d_bn_relu(batch_norm, C*2, C*2,
                            kernel_size=3, stride=1, padding=1, bias=False),
-            nn.Conv3d(hourglass_in_planes * 2, 1, kernel_size=3, stride=1, padding=1, bias=False)
+            nn.Conv3d(C * 2, 1, kernel_size=3, stride=1, padding=1, bias=False)
         )
 
         self.deconv = nn.ConvTranspose2d(self.disparity_sample_number, self.disparity_sample_number, 8, 4, 2, bias=False)
@@ -50,9 +49,9 @@ class MonoStereoAggregator(nn.Module):
 
     def forward(self, raw_cost):
         B, C, D, H, W = raw_cost.shape
-        # in: [B, in_planes, D, H, W], out: [B, 64, D, H, W]
+        # in: [B, in_planes, D, H, W], out: [B, 2C, D, H, W]
         cost = self.dres0(raw_cost)
-        # in: [B, 64, D, H, W], out: [B, hourglass_in_planes, D, H, W]
+        # in: [B, 2C, D, H, W], out: [B, hourglass_in_planes, D, H, W]
         cost = self.dres1(cost)
 
         # in: [B, hourglass_in_planes, D, H, W], out: [B, hourglass_in_planes, D, H, W]

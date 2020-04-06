@@ -42,7 +42,7 @@ class testModel(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.device = torch.device('cuda:7')
+        cls.device = torch.device('cuda:6')
         config_path = '/home/zhixiang/youmin/projects/depth/public/' \
                       'DenseMatchingBenchmark/configs/MonoStereo/scene_flow.py'
         cls.cfg = Config.fromfile(config_path)
@@ -95,12 +95,12 @@ class testModel(unittest.TestCase):
         self.avg_time[module_name] = avg_time
 
     @unittest.skip("demonstrating skipping")
-    def test_0_OutputModel(self):
+    def test_2_OutputModel(self):
         print(self.model)
         calcFlops(self.model, self.model_input['batch'])
 
     # @unittest.skip("demonstrating skipping")
-    def test_1_ModelTime(self):
+    def test_3_ModelTime(self):
         self.timeTemplate(self.model, 'Model', **self.model_input)
 
     # @unittest.skip("demonstrating skipping")
@@ -124,7 +124,7 @@ class testModel(unittest.TestCase):
             print(self.model.cmn.loss_evaluator.loss_evaluators)
 
     # @unittest.skip("demonstrating skipping")
-    def test_0_TestingPhase(self):
+    def test_1_TestingPhase(self):
         h, w = self.cfg.data.test.input_shape
         leftImage = torch.rand(1, 3, h, w).to(self.device)
         rightImage = torch.rand(1, 3, h, w).to(self.device)

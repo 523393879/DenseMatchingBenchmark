@@ -2,7 +2,7 @@ import torch.nn as nn
 
 from .utils.cat_fms import CAT_FUNCS
 from .utils.dif_fms import DIF_FUNCS
-from .utils.correlation_1d import COR_FUNCS
+from .utils.correlation1d_cost import COR_FUNCS
 from .aggregators import build_cost_aggregator
 
 from .deeppruner import DeepPrunerProcessor

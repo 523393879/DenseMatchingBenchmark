@@ -50,7 +50,7 @@ e. Install DenseMatchingBenchmark(other dependencies will be installed optionall
 ```bash
 # libs include: dmb, spn, GANet
 
-# the $1 can be: 'all', 'dmb', 'spn', 'GANet'
+# the $1 can be: 'all', 'dmb', 'spn', 'GANet', 'correlation', 'dcn'
 # => install all libs or specific lib, e.g. dmb
 
 # the $2 can be: 'install'
