@@ -154,6 +154,22 @@ class testModel(unittest.TestCase):
                 print(result['costs'][0].shape)
                 print('Device of cost: ', result['costs'][0].device)
 
+        if 'confs' in result:
+            print('Result for Confidence map')
+            print('Length of confidence list: ', len(result['confs']))
+            for i in range(len(result['confs'])):
+                conf = result['confs'][i]
+                if conf is not None and torch.is_tensor(conf):
+                    print('Confidence {} with shape: '.format(i), conf.shape)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+
+"""
+
+8: MonoStereo reference forward once takes 53.6991ms, i.e. 18.62fps
+4: MonoStereo reference forward once takes 40.6672ms, i.e. 24.59fps
+
+"""

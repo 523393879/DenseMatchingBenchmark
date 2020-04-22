@@ -30,7 +30,7 @@ class testBackbones(unittest.TestCase):
     def setUpTimeTestingClass(cls):
         cls.iters = 50
 
-        h, w = 384, 1280
+        h, w = 384, 1248
         leftImage = torch.rand(1, 3, h, w).to(cls.device)
         rightImage = torch.rand(1, 3, h, w).to(cls.device)
 
@@ -73,3 +73,8 @@ class testBackbones(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+"""
+MonoStereo reference forward once takes 12.4504ms, i.e. 80.32fps
+"""

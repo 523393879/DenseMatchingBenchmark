@@ -82,4 +82,3 @@ class WarpErrorRefinement(nn.Module):
         refine_disp = F.relu(refine_disp, inplace=True)
 
         return refine_disp
-

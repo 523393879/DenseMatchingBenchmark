@@ -12,7 +12,7 @@ from dmb.modeling.stereo.disp_samplers import build_disp_sampler
 class TestDispSamplers(unittest.TestCase):
 
     def setUp(self):
-        self.device = torch.device('cuda:4')
+        self.device = torch.device('cuda:6')
         self.iters = 50
 
         self.sampler_type = 'MONOSTEREO'
@@ -44,7 +44,7 @@ class TestDispSamplers(unittest.TestCase):
     def test_speed(self):
         max_disp = 192
         scale = 4
-        SH, SW = 544, 960
+        SH, SW = 384, 1248
         B, C, H, W = 1, 8, SH//scale, SW//scale
 
         left = torch.rand(B, 2*C, H, W).to(self.device)
@@ -60,12 +60,11 @@ class TestDispSamplers(unittest.TestCase):
                     # the down-sample scale of the input feature map
                     scale=scale,
                     # the number of diaparity samples
-                    disparity_sample_number=9,
+                    disparity_sample_number=8,
                     # the in planes of extracted feature
                     in_planes=2*C,
                     # the base channels of convolution layer in this network
                     C=C,
-                    sample_radius_list = [4, 8, 16, 32]
                 ),
             )
         ))
@@ -90,11 +89,11 @@ class TestDispSamplers(unittest.TestCase):
         print('*' * 60)
         print('Diaprity proposal sampler Speed!')
         context = torch.cat((proposal_disp, proposal_cost, left), dim=1)
-        self.timeTemplate(disp_sampler.deformable_sampler, 'DeformableSampler', context, proposal_disp)
+        self.timeTemplate(disp_sampler.deformable_sampler, 'DeformableSampler', context, proposal_disp, None)
 
         print('*' * 60)
         print('Wholistic Module Speed!')
-        self.timeTemplate(disp_sampler, self.sampler_type, left, right)
+        self.timeTemplate(disp_sampler, self.sampler_type, left, right, proposal_disp, proposal_cost, None)
 
 
 if __name__ == '__main__':
@@ -102,22 +101,11 @@ if __name__ == '__main__':
 
 '''
 
-Test on GTX1080Ti, 544x960
+Test on GTX1080Ti, 384x1248
 
-perform on full scale
-MONOSTEREO reference forward once takes 0.0604s, i.e. 16.55fps
-Correlation reference forward once takes 0.0604s, i.e. 296.75fps
-Aggregator reference forward once takes 0.0540s, i.e. 18.52fps
-NearSampler reference forward once takes 0.0034s, i.e. 293.25fps
 
-only perform on 1/4 scale
-MONOSTEREO reference forward once takes 0.0054s, i.e. 186.68fps
-Correlation reference forward once takes 0.0033s, i.e. 303.29fps
-Aggregator reference forward once takes 0.0033s, i.e. 305.13fps
-NearSampler reference forward once takes 0.0012s, i.e. 866.98fps
-
-MONOSTEREO reference forward once takes 0.0105s, i.e. 95.00fps
-Correlation reference forward once takes 0.3979s, i.e. 2.51fps
-Aggregator reference forward once takes 0.0033s, i.e. 298.66fps
-DeformableSampler reference forward once takes 0.0098s, i.e. 101.99fps
+Correlation reference forward once takes 0.1957s, i.e. 5.11fps
+Aggregator reference forward once takes 0.0032s, i.e. 308.87fps
+DeformableSampler reference forward once takes 0.0050s, i.e. 199.79fps
+MONOSTEREO reference forward once takes 0.0064s, i.e. 155.05fps
 '''

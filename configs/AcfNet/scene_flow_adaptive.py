@@ -39,6 +39,8 @@ model = dict(
         alpha=1.0,
         # the lower bound of variance of distribution
         beta=1.0,
+        # the in planes of confidence measure network
+        in_planes=max_disp,
         losses=dict(
             nll_loss=dict(
                 # the maximum disparity of disparity search range

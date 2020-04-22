@@ -24,12 +24,11 @@ model = dict(
         # the down-sample scale of the input feature map
         scale=4,
         # the number of diaparity samples
-        disparity_sample_number=9,
+        disparity_sample_number=8,
         # the in planes of extracted feature
         in_planes=2*C,
         # the base channels of convolution layer in this network
         C=C,
-        sample_radius_list = [4, 8, 16, 32]
     ),
     cost_processor=dict(
         type='CAT',
@@ -44,7 +43,30 @@ model = dict(
             # the base channels of convolution layer in this network
             C=C,
             # the number of diaparity samples
-            disparity_sample_number=9,
+            disparity_sample_number=8,
+        ),
+    ),
+    cmn=dict(
+        # the number of replicated confidence measure network
+        num=1,
+        # variance = alpha * ( 1 - confidence ) + beta
+        # confidence estimation network coefficient
+        alpha=1.0,
+        # the lower bound of variance of distribution
+        beta=1.0,
+        # the in planes of confidence measure network
+        in_planes=max_disp // 4,
+        losses=dict(
+            nll_loss=dict(
+                # the maximum disparity of disparity search range
+                max_disp=max_disp,
+                # the start disparity of disparity search range
+                start_disp=0,
+                # weight for confidence loss with regard to other loss type
+                weight=120.0,
+                # weights for different scale loss
+                weights=(1.0, ),
+            ),
         ),
     ),
     disp_predictor=dict(
@@ -70,7 +92,7 @@ model = dict(
             # the maximum disparity of disparity search range
             max_disp=max_disp,
             # weights for different scale loss
-            weights=(1.0, 0.5, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1),
+            weights=(1.0, 0.7, 0.5),
             # weight for l1 loss with regard to other loss type
             weight=1.0,
         ),
@@ -80,14 +102,24 @@ model = dict(
             # the start disparity of disparity search range
             start_disp=0,
             # weight for stereo focal loss with regard to other loss type
-            weight=1.0,
+            weight=5.0,
             # weights for different scale loss
-            weights=(1.0, 0.5),
+            weights=(1.0, ),
             # stereo focal loss focal coefficient
             coefficient=5.0,
             # the variance of uni-modal distribution
-            variance=1.2,  # if not given, the variance will be estimated by network
+            variance=None, # 1.2,  # if not given, the variance will be estimated by network
         ),
+        relative_loss=dict(
+            # the maximum disparity of disparity search range
+            max_disp=max_disp,
+            # the start disparity of disparity search range
+            start_disp=0,
+            # weight for stereo focal loss with regard to other loss type
+            weight=10.0,
+            # weights for different scale loss
+            weights=(1.0, 1.0),
+        )
     ),
     eval=dict(
         # evaluate the disparity map within (lower_bound, upper_bound)
@@ -203,7 +235,7 @@ total_epochs = 64
 
 # each model will return several disparity maps, but not all of them need to be evaluated
 # here, by giving indexes, the framework will evaluate the corresponding disparity map
-eval_disparity_id = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+eval_disparity_id = [0, 1, 2, 3, 4]
 
 gpus = 4
 dist_params = dict(backend='nccl')
@@ -212,7 +244,7 @@ validate = True
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
-work_dir = osp.join(root, 'exps/MonoStereo/scene_flow_correlation_C8_deform_radiusFP')
+work_dir = osp.join(root, 'exps/MonoStereo/scene_flow_correlation_C8_relativeSigmoid_NoLinearConfMinMax100Loss')
 
 # For test
 checkpoint = osp.join(work_dir, 'epoch_64.pth')

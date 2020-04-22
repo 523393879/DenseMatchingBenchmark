@@ -10,7 +10,6 @@ from dmb.modeling.stereo.disp_predictors import build_disp_predictor
 from dmb.modeling.stereo.disp_refinement import build_disp_refinement
 from dmb.modeling.stereo.losses import make_gsm_loss_evaluator
 
-
 class MonoStereo(nn.Module):
     """
     A general stereo matching model which fits most methods.
@@ -41,6 +40,17 @@ class MonoStereo(nn.Module):
         # make general stereo matching loss evaluator
         self.loss_evaluator = make_gsm_loss_evaluator(cfg)
 
+        self.min_max_weight = nn.Sequential(
+            nn.Conv2d(65, 24, kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
+            nn.BatchNorm2d(24),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(24, 8, kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
+            nn.BatchNorm2d(8),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(8, 1, kernel_size=3, stride=1, padding=1, dilation=1, bias=True),
+            nn.ReLU(inplace=True),
+        )
+
     def forward(self, batch):
         # parse batch
         ref_img, tgt_img = batch['leftImage'], batch['rightImage']
@@ -49,16 +59,27 @@ class MonoStereo(nn.Module):
         # extract image feature
         ref_fms, tgt_fms = self.backbone(ref_img, tgt_img)
 
+        proposal_disps, proposal_costs = self.disp_sampler.get_proposal(left=ref_fms, right=tgt_fms)
+        confs, variances, conf_costs = self.cmn.get_confidence(proposal_costs)
         # all returned disparity map are in 1/4 resolution
-        disparity_sample, proposal_disps, proposal_costs, offsets, masks = self.disp_sampler(left=ref_fms, right=tgt_fms)
+        disparity_sample, offsets, masks, min_max_disps = self.disp_sampler(left=ref_fms,
+                                                                            right=tgt_fms,
+                                                                            proposal_disp=proposal_disps[0],
+                                                                            proposal_cost=proposal_costs[0],
+                                                                            confidence_cost=conf_costs[0])
         # up-sample to full resolution
         h, w = ref_img.shape[-2:]
         ph, pw = disparity_sample.shape[-2:]
         full_disparity_sample = F.interpolate(disparity_sample * w / pw, size=(h, w), mode='bilinear', align_corners=False)
         full_proposal_disps = [F.interpolate(d * w / d.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for d in proposal_disps]
-        full_offsets = [F.interpolate(f*w/f.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for f in offsets]
+        full_offsets = [F.interpolate(o*w/o.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for o in offsets]
         full_masks = [F.interpolate(m, size=(h, w), mode='bilinear', align_corners=False) for m in masks]
+        full_min_max_disps = [F.interpolate(d * w / d.shape[-1], size=(h, w), mode='bilinear', align_corners=False) for d in min_max_disps]
 
+        # get min max loss weight
+        weight_context = torch.cat((proposal_costs[0], ref_fms, proposal_disps[0]), dim=1)
+        confidence_weight = self.min_max_weight(weight_context) + 1e-5
+        confidence_weight = F.interpolate(confidence_weight, size=(h,w), mode='bilinear', align_corners=False)
 
         # compute cost volume
         costs = self.cost_processor(ref_fms, tgt_fms, disp_sample=disparity_sample)
@@ -70,28 +91,41 @@ class MonoStereo(nn.Module):
         if self.disp_refinement is not None:
             disps = self.disp_refinement(disps, ref_fms, tgt_fms, ref_img, tgt_img)
 
-        # # extend disparity map estimated in monocular way
-        disparity_samples = torch.split(full_disparity_sample, 1, dim=1)
-        disps.extend(disparity_samples)
-        # disps.extend(full_proposal_disps)
+        # refined, estimated, coarse, min, max
+        disps.extend(full_proposal_disps)
+        # disps.extend(full_min_max_disps)
 
         # supervise cost computed in disparity sampler network
         costs = proposal_costs
 
         if self.training:
             loss_dict = dict()
-            variance = None
-            if hasattr(self.cfg.model.losses, 'focal_loss'):
-                variance = self.cfg.model.losses.focal_loss.get('variance', None)
-
             if self.cmn is not None:
                 # confidence measurement network
-                variance, cm_losses = self.cmn(costs, target)
+                cm_losses = self.cmn.get_loss(confs=confs, target=target)
                 loss_dict.update(cm_losses)
 
+            min_disparity, max_disparity = full_min_max_disps
+            # for min disparity, computing relative loss to make sure it smaller than min disparity
+            min_label =  1 * torch.ones_like(min_disparity).to(min_disparity)
+            # for max disparity, computing relative loss to make sure it larger than min disparity
+            max_label = -1 * torch.ones_like(max_disparity).to(max_disparity)
+
             loss_args = dict(
-                variance = variance,
+                variance = variances,
+                relative_disps = [min_disparity, max_disparity],
+                relative_labels = [min_label, max_label],
             )
+
+            mask = (target > 0) & (target < self.cfg.max_disp)
+            exp_confidence_weight = torch.exp(-confidence_weight[mask])
+            min_loss = F.smooth_l1_loss(min_disparity[mask] * exp_confidence_weight,
+                                        target[mask] * exp_confidence_weight, reduction='mean')
+            max_loss = F.smooth_l1_loss(max_disparity[mask] * exp_confidence_weight,
+                                        target[mask] * exp_confidence_weight, reduction='mean')
+            uncertainty_loss = 100 * confidence_weight[mask] / mask.float().sum()
+
+            loss_dict.update(l1_loss_min=min_loss, l1_loss_max=max_loss, uncertainty_loss=uncertainty_loss)
 
             gsm_loss_dict = self.loss_evaluator(disps, costs, target, **loss_args)
             loss_dict.update(gsm_loss_dict)
@@ -99,16 +133,13 @@ class MonoStereo(nn.Module):
             return {}, loss_dict
 
         else:
+            disps.extend(full_min_max_disps)
 
             # visualize residual disparity map
             res_disps = []
-            for i in range(1, 3):
+            for i in range(1, len(disps)):
                 res_disps.append((disps[i-1] - disps[i]).abs())
             disps.extend(res_disps)
-
-            # visualize disparity sample
-            # disparity_samples = torch.split(full_disparity_sample, 1, dim=1)
-            # disps.extend(disparity_samples)
 
             results = dict(
                 disps=disps,
@@ -118,8 +149,8 @@ class MonoStereo(nn.Module):
             )
 
             if self.cmn is not None:
+                confs.append(confidence_weight)
                 # confidence measurement network
-                variance, confs = self.cmn(costs, target)
                 results.update(confs=confs)
 
             return results, {}
